@@ -1,0 +1,106 @@
+{
+  "name": "German Property - Report Viewer",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "RESELECT_DATA_TABLE",
+          "mode": "list",
+          "cachedResultName": "property_evaluations_table"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "property_id",
+              "keyValue": "={{ String($input.first().json.query.property_id).trim() }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "bf2c08b0-b2f4-4ed2-899c-df54537343f4",
+      "name": "Get Saved Property Report"
+    },
+    {
+      "parameters": {
+        "path": "property-report",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5af7d247-df83-4dbb-8cbb-0c36954b4c99",
+      "name": "Webhook - View Property Report",
+      "webhookId": "60ed178d-e79f-4a78-8b9a-c28e63d9adc3"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=\n{{ $json.final_report_html }}\n",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "05566e5e-6b41-4da4-960a-3d27d6cddc07",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "connections": {
+    "Webhook - View Property Report": {
+      "main": [
+        [
+          {
+            "node": "Get Saved Property Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Saved Property Report": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "active": false,
+  "pinData": {}
+}

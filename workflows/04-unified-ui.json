@@ -1,0 +1,95 @@
+{
+  "name": "German Property - Unified UI",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "property-ui",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "31cbd287-4156-4bbb-a18f-7002d6932c45",
+      "name": "Open Property UI",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "d0354074-c131-4da3-a849-9dc1af11a107"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{html:\"<!doctype html><html lang=\\\"en\\\"><head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width,initial-scale=1\\\"><title>Property evaluator</title><style>\\n*{box-sizing:border-box}body{margin:0;background:#f3f6fa;color:#172234;font:16px system-ui,sans-serif}header{background:#153149;color:white;padding:26px max(24px,calc((100vw - 1200px)/2))}h1{font-size:25px;margin:0 0 6px}header p{margin:0;color:#cedde8}main{max-width:1200px;margin:auto;padding:24px;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);gap:20px}.card{background:white;border:1px solid #dce4eb;border-radius:12px;padding:20px;box-shadow:0 2px 8px #1735500d}h2{font-size:19px;margin:0 0 12px}p{line-height:1.45}label{display:block;font-weight:600;margin:12px 0 6px}input,textarea,button{font:inherit}input[type=file],input[type=text],textarea{width:100%;padding:10px;border:1px solid #aab9c8;border-radius:7px}button{border:0;border-radius:7px;background:#176b79;color:white;padding:10px 15px;cursor:pointer;margin-top:12px}button:disabled{opacity:.5;cursor:not-allowed}.muted{color:#5e6f7d;font-size:14px}.status{min-height:1.4em;white-space:pre-wrap}.error{color:#a22d2d}.meta{overflow-wrap:anywhere}iframe{width:100%;height:700px;border:1px solid #dce4eb;border-radius:7px;background:#fff}.messages{height:330px;overflow:auto;background:#f6f8fb;border-radius:8px;padding:12px}.message{white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 12px;padding:10px;border-radius:8px;background:white}.message.user{background:#dceff0}.message strong{display:block;margin-bottom:5px}textarea{min-height:80px;resize:vertical}@media(max-width:800px){main{grid-template-columns:1fr}iframe{height:520px}}\\n</style></head><body><header><h1>Property evaluator</h1><p>Upload a property PDF, review the report, and ask follow-up questions.</p></header><main><section><div class=\\\"card\\\"><h2>1. Evaluate a property</h2><form id=\\\"upload\\\"><label for=\\\"pdf\\\">Property PDF</label><input id=\\\"pdf\\\" type=\\\"file\\\" accept=\\\"application/pdf,.pdf\\\" required><button id=\\\"evaluate\\\">Evaluate property</button></form><p id=\\\"uploadStatus\\\" class=\\\"status muted\\\" role=\\\"status\\\"></p><p class=\\\"muted\\\">Evaluation may take several minutes. Keep this page open.</p><div id=\\\"identity\\\" class=\\\"meta muted\\\"></div></div><div class=\\\"card\\\" style=\\\"margin-top:20px\\\"><h2>2. Investment report</h2><p id=\\\"reportNote\\\" class=\\\"muted\\\">The report will appear here after evaluation.</p><iframe id=\\\"report\\\" title=\\\"Investment report\\\" sandbox hidden></iframe><details id=\\\"jsonDetails\\\" hidden><summary>View report data</summary><pre id=\\\"json\\\" style=\\\"white-space:pre-wrap;overflow-wrap:anywhere\\\"></pre></details></div></section><section><div class=\\\"card\\\"><h2>3. Ask about this property</h2><p class=\\\"muted\\\">The conversation stays linked to the evaluated property and this session while the page is open.</p><div id=\\\"messages\\\" class=\\\"messages\\\" aria-live=\\\"polite\\\"></div><form id=\\\"chat\\\"><label for=\\\"question\\\">Your question</label><textarea id=\\\"question\\\" placeholder=\\\"What are the main risks?\\\" required disabled></textarea><button id=\\\"send\\\" disabled>Send question</button></form><p id=\\\"chatStatus\\\" class=\\\"status muted\\\" role=\\\"status\\\"></p><details><summary>Resume with IDs</summary><p class=\\\"muted\\\">Paste IDs from an earlier session to continue its conversation. The report is not restored.</p><label for=\\\"property\\\">Property ID</label><input id=\\\"property\\\" type=\\\"text\\\"><label for=\\\"session\\\">Session ID</label><input id=\\\"session\\\" type=\\\"text\\\"><button id=\\\"resume\\\" type=\\\"button\\\">Use these IDs</button></details></div></section></main><script>\\n'use strict';\\n// Absolute URL required inside n8n's sandboxed HTML iframe.\\nconst BASE = 'http://localhost:5678';\\nconst $ = id => document.getElementById(id);\\nlet propertyId='', sessionId='', busy=false;\\nfunction status(el,message,error=false){el.textContent=message;el.classList.toggle('error',error)}\\nfunction identifier(){return 'session-'+(crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join(''))}\\nfunction setIds(p,s){propertyId=p;sessionId=s;$('property').value=p;$('session').value=s;$('identity').textContent='Property ID: '+p+'\\\\nSession ID: '+s;$('identity').style.whiteSpace='pre-wrap';$('question').disabled=false;$('send').disabled=false}\\nfunction unwrap(value){if(Array.isArray(value))return value[0];return value}\\nasync function responseJson(response){const text=await response.text();let value;try{value=JSON.parse(text);if(typeof value==='string')value=JSON.parse(value)}catch{throw new Error('The server returned an invalid response (HTTP '+response.status+').')}if(!response.ok)throw new Error(value.message||value.error||('HTTP '+response.status));return unwrap(value)}\\nfunction addMessage(role,content){const div=document.createElement('div'),title=document.createElement('strong'),body=document.createElement('span');div.className='message '+(role==='You'?'user':'');title.textContent=role;body.textContent=content;div.append(title,body);$('messages').append(div);$('messages').scrollTop=$('messages').scrollHeight}\\n$('upload').addEventListener('submit',async e=>{e.preventDefault();if(busy)return;const file=$('pdf').files[0];if(!file||!file.name.toLowerCase().endsWith('.pdf')){status($('uploadStatus'),'Please choose a PDF file.',true);return}busy=true;$('evaluate').disabled=true;status($('uploadStatus'),'Evaluating your property\\u2026');try{const form=new FormData();form.append('property_pdf',file);const data=await responseJson(await fetch(BASE+'/webhook/evaluate-property',{method:'POST',body:form,credentials:'omit'}));if(!data||typeof data.property_id!=='string'||!data.property_id.trim())throw new Error('The response did not include a property ID.');setIds(data.property_id,identifier());$('messages').replaceChildren();$('report').hidden=true;$('jsonDetails').hidden=true;$('reportNote').textContent='';if(typeof data.report_html==='string'&&data.report_html.trim()){const csp=\\\"<meta http-equiv=\\\\\\\"Content-Security-Policy\\\\\\\" content=\\\\\\\"default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'\\\\\\\">\\\";$('report').srcdoc='<!doctype html><html><head>'+csp+'</head><body>'+data.report_html+'</body></html>';$('report').hidden=false}else{$('reportNote').textContent='No HTML report was returned.'}if(data.report_json!=null){$('json').textContent=JSON.stringify(data.report_json,null,2);$('jsonDetails').hidden=false}status($('uploadStatus'),'Evaluation complete.');status($('chatStatus'),'')}catch(err){status($('uploadStatus'),'Evaluation failed: '+err.message+'. Check that the production webhook is active and reachable.',true)}finally{busy=false;$('evaluate').disabled=false}});\\n$('chat').addEventListener('submit',async e=>{e.preventDefault();const q=$('question').value.trim();if(!q||!propertyId||!sessionId)return;const p=propertyId,s=sessionId;$('send').disabled=true;$('question').disabled=true;addMessage('You',q);$('question').value='';status($('chatStatus'),'Waiting for an answer\\u2026');try{const data=await responseJson(await fetch(BASE+'/webhook/property-chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({property_id:p,sessionId:s,chatInput:q}),credentials:'omit'}));if(!data||typeof data.answer!=='string'||!data.answer.trim())throw new Error('The response did not include an answer.');if(data.property_id&&data.property_id!==p)throw new Error('The response refers to a different property.');if(propertyId===p&&sessionId===s)addMessage('Assistant',data.answer);status($('chatStatus'),'')}catch(err){status($('chatStatus'),'Chat failed: '+err.message+'. Your question is shown above; try again.',true)}finally{$('send').disabled=!propertyId;$('question').disabled=!propertyId}});\\n$('resume').addEventListener('click',()=>{const p=$('property').value.trim(),s=$('session').value.trim();if(!p||!s){status($('chatStatus'),'Enter both IDs.',true);return}setIds(p,s);$('messages').replaceChildren();$('report').hidden=true;$('jsonDetails').hidden=true;$('reportNote').textContent='Reports are not restored when resuming.';status($('chatStatus'),'Session selected.')});\\n</script></body></html>\\n\"}}];"
+      },
+      "id": "b0bf952a-265f-4017-8790-0aea5c81af40",
+      "name": "Build UI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "8e2b8b49-1ce2-490a-9317-aa73d3f828f7",
+      "name": "Serve UI",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        440,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Open Property UI": {
+      "main": [
+        [
+          {
+            "node": "Build UI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build UI": {
+      "main": [
+        [
+          {
+            "node": "Serve UI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "active": false,
+  "pinData": {}
+}

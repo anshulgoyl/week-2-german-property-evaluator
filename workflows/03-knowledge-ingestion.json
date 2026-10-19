@@ -1,0 +1,319 @@
+{
+  "name": "German Housing RAG - PDF Ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "German Housing Knowledge Base",
+        "formDescription": "Upload PDF or Excel documents",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Upload Document",
+              "fieldType": "file",
+              "fieldName": "document_file",
+              "acceptFileTypes": ".pdf,.xlsx,.xls",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "id": "3a87ac12-df93-482f-967c-997c4fa46490",
+      "name": "On form submission",
+      "webhookId": "392bcd5b-cacf-450e-9748-c0ee1fb9f09a"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "document_file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        -112
+      ],
+      "id": "363a0d4e-d43a-4e4c-8b8d-a72794a3d130",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $binary.document_file.fileExtension.toLowerCase() }}",
+                    "rightValue": "pdf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "4c1eb7c4-0a65-451b-b89d-00eb6a458a90"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "PDF"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "d7867c9c-5677-4485-a077-f6e57bde057b",
+                    "leftValue": "={{ $binary.document_file.fileExtension.toLowerCase() }}",
+                    "rightValue": "^(xlsx|xls)$",
+                    "operator": {
+                      "type": "string",
+                      "operation": "regex"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Excel"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        0
+      ],
+      "id": "29d3cae4-808f-4193-8255-8c4e32a087a0",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "document_file",
+        "options": {
+          "headerRow": false
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        96
+      ],
+      "id": "87321869-3ad5-45b5-bd3f-fb85f57236bf",
+      "name": "Extract from File1"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst items = $input.all();\nconst rows = items.map(item => item.json.row || []);\n\nconst file = $('On form submission').first()\n  .binary?.document_file;\n\nconst filename = file?.fileName || 'unknown.xlsx';\n\nconst documentId = filename\n  .replace(/\\.[^.]+$/, '')\n  .replace(/[^a-zA-Z0-9_-]/g, '-')\n  .toLowerCase();\n\nconst isFilled = value =>\n  value !== null &&\n  value !== undefined &&\n  String(value).trim() !== '';\n\nconst clean = value => String(value ?? '').trim();\n\nif (rows.length === 0) return [];\n\n// Detect likely header row\nlet headerIndex = -1;\nlet bestScore = -1;\n\nfor (let i = 0; i < Math.min(rows.length, 15); i++) {\n  const cells = rows[i];\n  const filled = cells.filter(isFilled);\n\n  const textCells = filled.filter(v =>\n    typeof v === 'string' &&\n    !/^https?:\\/\\//i.test(v)\n  );\n\n  const score = filled.length >= 2\n    ? textCells.length * 2 + filled.length\n    : -1;\n\n  if (score > bestScore) {\n    bestScore = score;\n    headerIndex = i;\n  }\n}\n\nif (headerIndex < 0) {\n  throw new Error('Could not detect an Excel header row');\n}\n\nconst headers = rows[headerIndex].map(\n  (value, index) =>\n    isFilled(value)\n      ? clean(value)\n      : `Column_${index + 1}`\n);\n\nconst output = [];\n\nfor (let i = headerIndex + 1; i < rows.length; i++) {\n  const cells = rows[i];\n\n  const fields = headers\n    .map((header, index) => ({\n      header,\n      value: cells[index]\n    }))\n    .filter(field => isFilled(field.value));\n\n  if (fields.length === 0) continue;\n\n  const text = fields\n    .map(field =>\n      `${field.header}: ${clean(field.value)}`\n    )\n    .join('\\n');\n\n  output.push({\n    json: {\n      id: `${documentId}-row-${i + 1}`,\n      text,\n      source: filename,\n      file_type: 'xlsx',\n      document_id: documentId,\n      chunk_index: i + 1,\n      row_number: i + 1,\n      detected_header_row: headerIndex + 1,\n      fields: Object.fromEntries(\n        fields.map(field => [\n          field.header,\n          field.value\n        ])\n      )\n    }\n  });\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        96
+      ],
+      "id": "e3232756-4958-4040-a828-cdab63442d32",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst items = $input.all();\nconst results = [];\n\nconst chunkSize = 1000;\nconst overlap = 200;\nconst step = chunkSize - overlap;\n\nconst file = $('On form submission')\n  .first().binary?.document_file;\n\nconst filename = file?.fileName || 'unknown.pdf';\n\nconst documentId = filename\n  .replace(/\\.pdf$/i, '')\n  .replace(/[^a-zA-Z0-9_-]/g, '-')\n  .toLowerCase();\n\nfor (const item of items) {\n  const text = item.json.text || '';\n\n  if (!text.trim()) continue;\n\n  let chunkIndex = 0;\n\n  for (let start = 0; start < text.length; start += step) {\n    const chunk = text.slice(start, start + chunkSize);\n\n    if (!chunk.trim()) continue;\n\n    results.push({\n      json: {\n        id: `${documentId}-chunk-${chunkIndex}`,\n        text: chunk,\n        source: filename,\n        file_type: 'pdf',\n        document_id: documentId,\n        chunk_index: chunkIndex\n      }\n    });\n\n    chunkIndex++;\n\n    if (start + chunkSize >= text.length) break;\n  }\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -112
+      ],
+      "id": "92699caf-2f54-4d0a-af78-3f5b63587674",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_PINECONE_INDEX_HOST/vectors/upsert",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{ JSON.stringify({\n  vectors: [{\n    id: $json.id,\n    values: $json.values,\n    metadata: $json.metadata\n  }],\n  namespace: \"documents\"\n}) }}\n",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1504,
+        -16
+      ],
+      "id": "c71d3eaf-83a4-42aa-b745-d09d8d1d707e",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tokenfactory.nebius.com/v1/embeddings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{ JSON.stringify({\n  model: \"Qwen/Qwen3-Embedding-8B\",\n  input: $json.text\n}) }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1056,
+        0
+      ],
+      "id": "1a1fc2b2-6799-4bb3-bf2a-c4bbb972ba8d",
+      "name": "HTTP Request2",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst responses = $input.all();\n\n// Identify which file type was uploaded\nconst file = $('On form submission')\n  .first().binary.document_file;\n\nconst extension = file.fileExtension.toLowerCase();\n\n// Select the active normalization node\nconst originals = extension === 'pdf'\n  ? $('Code in JavaScript1').all()\n  : $('Code in JavaScript').all();\n\nif (originals.length !== responses.length) {\n  throw new Error(\n    `Count mismatch: ${originals.length} originals, ` +\n    `${responses.length} embeddings`\n  );\n}\n\nreturn responses.map((item, index) => {\n  const original = originals[index].json;\n  const vector = item.json.data?.[0]?.embedding;\n\n  if (!original.id || !original.text) {\n    throw new Error(\n      `Missing original metadata at item ${index}`\n    );\n  }\n\n  if (!Array.isArray(vector) || vector.length !== 4096) {\n    throw new Error(\n      `Invalid embedding at item ${index}`\n    );\n  }\n\n  return {\n    json: {\n      id: original.id,\n      values: vector,\n      metadata: {\n        text: original.text,\n        source: original.source,\n        file_type: original.file_type,\n        document_id: original.document_id,\n        chunk_index: original.chunk_index\n      }\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        -16
+      ],
+      "id": "a4b80821-2285-4c08-a386-2e1289bc743e",
+      "name": "Code in JavaScript2"
+    }
+  ],
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract from File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "active": false,
+  "pinData": {}
+}
